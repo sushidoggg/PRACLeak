@@ -90,6 +90,8 @@ class BHO3Core: public Clocked<BHO3Core> {
     ITranslation* m_translation;
     BHO3LLC* m_llc;
 
+    std::ofstream& m_latency_file;
+
     std::function<void(Request&)> m_callback;
 
     int    m_num_bubbles = 0;
@@ -103,7 +105,8 @@ class BHO3Core: public Clocked<BHO3Core> {
     std::unordered_map<int, uint64_t> m_lat_histogram;
     std::filesystem::path m_dump_path;
 
-    bool m_is_attacker = false;
+    bool m_is_attacker = false;     // Flush
+    bool m_no_activation = false;   // Activation
 
     void dump_latency_histogram();
 
@@ -121,7 +124,7 @@ class BHO3Core: public Clocked<BHO3Core> {
   public:
     BHO3Core(int id, int ipc, int depth,
       size_t num_expected_insts, uint64_t num_max_cycles, std::string trace_path,
-      ITranslation* translation, BHO3LLC* llc, int lat_hist_sens, std::string& dump_path, bool is_attacker);
+      ITranslation* translation, BHO3LLC* llc, int lat_hist_sens, std::string& dump_path, bool is_attacker, bool no_activation, std::ofstream& m_latency_file);
 
     /**
      * @brief   Ticks the core.

@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <limits>
 #include <filesystem>
+#include <iostream>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -47,11 +48,27 @@ class TraceRecorder : public IControllerPlugin, public Implementation {
       m_clk++;
 
       if (request_found) {
+        
+        // convert addr_vec to addr
+        // m_addr_bits: {0, 1, 3, 2, 16, 6}, last 6 is trimmed 
+        // vaddr: [14 lost, 16, 2, 3, 1, 6, 6]
+        unsigned long long addr = req_it->addr_vec[4];
+        addr <<= 6;
+        addr |= req_it->addr_vec[5];
+        addr <<= 1;
+        addr |= req_it->addr_vec[1];
+        addr <<= 3;
+        addr |= req_it->addr_vec[2];
+        addr <<= 2;
+        addr |= req_it->addr_vec[3];
+        addr <<= 6;
+
         m_tracer->trace(
-          "{}, {}, {}", 
+          "{}, {}, {}, {}", 
           m_clk,
           m_dram->m_commands(req_it->command),
-          fmt::join(req_it->addr_vec, ", ")
+          fmt::join(req_it->addr_vec, ", "),
+          addr
         );
       }
 

@@ -4,6 +4,7 @@
 #include "dram/dram.h"
 #include "addr_mapper/addr_mapper.h"
 #include "memory_system/memory_system.h"
+#include <iostream>
 
 namespace Ramulator {
 
@@ -34,8 +35,18 @@ class LinearMapperBase : public IAddrMapper {
       // Last (Column) address have the granularity of the prefetch size
       m_addr_bits[m_num_levels - 1] -= calc_log2(m_dram->m_internal_prefetch_size);
 
+      std::cout << "m_addr_bits: ";
+      // print m_addr_bits
+      for (int i = 0; i < m_addr_bits.size(); i++) {
+        std::cout << m_addr_bits[i] << " ";
+      }
+      std::cout << "\n";
+
       int tx_bytes = m_dram->m_internal_prefetch_size * m_dram->m_channel_width / 8;
+      // tx_bytes = 64, m_internal_prefetch_size = 16, m_channel_width = 32
+
       m_tx_offset = calc_log2(tx_bytes);
+      std::cout << "Cacheline size " << tx_bytes << " " << m_tx_offset << "\n";
 
       // Determine where are the row and col bits for ChRaBaRoCo and RoBaRaCoCh
       try {
@@ -67,6 +78,35 @@ class ChRaBaRoCo final : public LinearMapperBase, public Implementation {
       for (int i = m_addr_bits.size() - 1; i >= 0; i--) {
         req.addr_vec[i] = slice_lower_bits(addr, m_addr_bits[i]);
       }
+    }
+};
+
+class RoCoRaBaCh final : public LinearMapperBase, public Implementation {
+  RAMULATOR_REGISTER_IMPLEMENTATION(IAddrMapper, RoCoRaBaCh, "RoCoRaBaCh", "Applies a RoCoRaBaCh mapping to the address.");
+
+  public:
+    void init() override { };
+
+    void setup(IFrontEnd* frontend, IMemorySystem* memory_system) override {
+      LinearMapperBase::setup(frontend, memory_system);
+    }
+
+    void apply(Request& req) override {
+      req.addr_vec.resize(m_num_levels, -1);
+      Addr_t addr = req.addr >> m_tx_offset;
+
+      // Channel
+      req.addr_vec[0] = slice_lower_bits(addr, m_addr_bits[0]);
+      // Bank group
+      req.addr_vec[3] = slice_lower_bits(addr, m_addr_bits[3]);
+      // Bank
+      req.addr_vec[2] = slice_lower_bits(addr, m_addr_bits[2]);
+      // Rank
+      req.addr_vec[1] = slice_lower_bits(addr, m_addr_bits[1]);
+      // Column
+      req.addr_vec[5] = slice_lower_bits(addr, m_addr_bits[5]);
+      // Row
+      req.addr_vec[4] = slice_lower_bits(addr, m_addr_bits[4]);
     }
 };
 
@@ -105,7 +145,7 @@ class MOP4CLXOR final : public LinearMapperBase, public Implementation {
 
     void apply(Request& req) override {
       req.addr_vec.resize(m_num_levels, -1);
-      Addr_t addr = req.addr >> m_tx_offset;
+      Addr_t addr = req.addr >> (m_tx_offset - 2);
       req.addr_vec[m_col_bits_idx] = slice_lower_bits(addr, 2);
       for (int lvl = 0 ; lvl < m_row_bits_idx ; lvl++)
           req.addr_vec[lvl] = slice_lower_bits(addr, m_addr_bits[lvl]);

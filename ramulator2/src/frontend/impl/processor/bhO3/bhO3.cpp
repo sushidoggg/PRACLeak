@@ -1,5 +1,7 @@
 #include <functional>
 #include <limits>
+#include <iostream>
+#include <fstream>
 
 #include "base/utils.h"
 #include "frontend/frontend.h"
@@ -42,6 +44,8 @@ void BHO3::init() {
   m_num_expected_insts = param<int>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
   m_num_max_cycles = param<uint64_t>("num_max_cycles").desc("Number of cycles the frontend is allowed to execute.").default_val(std::numeric_limits<uint64_t>::max());
 
+  std::string latency_path = param<std::string>("latency_path").desc("Path to store latency counts.").default_val("");
+
   // Create address translation module
   m_translation = create_child_ifce<ITranslation>();
 
@@ -54,19 +58,24 @@ void BHO3::init() {
     m_llc->deserialize(llc_deserialization_filename);
   }
 
+  latency_file.open(latency_path, std::ofstream::out | std::ofstream::trunc);
+
   // Create the cores
   std::cout << "Trace ID - Name Mapping:" << std::endl;
   for (int id = 0; id < m_num_cores; id++) {
     bool is_blocking = id < m_num_blocking_cores;
     bool is_attacker = !is_blocking;
+    bool no_activation = (id == m_num_cores - 1);
     auto& active_list = is_blocking ? trace_list : no_wait_trace_list;
     auto active_id = is_blocking ? id : (id - m_num_blocking_cores);
     auto* cur_translate = is_blocking ? m_translation : nullptr;
     // auto* cur_translate = m_translation;
     std::cout << "name_trace_" << id << ": " << active_list[active_id] << std::endl;
+    
     BHO3Core* core = new BHO3Core(id, ipc, depth,
       m_num_expected_insts, m_num_max_cycles, active_list[active_id],
-      cur_translate, m_llc, lat_hist_sensitivity, lat_dump_path, is_attacker);
+      cur_translate, m_llc, lat_hist_sensitivity, lat_dump_path, is_attacker,
+      no_activation, latency_file);
     core->m_callback = [this](Request& req){return this->receive(req);} ;
     m_cores.push_back(core);
   }
@@ -125,6 +134,7 @@ bool BHO3::is_finished() {
   }
   if (llc_serialize)
     m_llc->serialize(llc_serialization_filename);
+  latency_file.close();
   return true;
 }
 

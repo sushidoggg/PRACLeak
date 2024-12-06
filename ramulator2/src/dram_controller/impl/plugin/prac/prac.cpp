@@ -9,6 +9,7 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
 
 namespace Ramulator {
 
@@ -69,6 +70,14 @@ public:
 
     void update(bool request_found, ReqBuffer::iterator& req_it) override {
         m_clk++;
+
+        // if (m_clk == m_clk / 1000 * 1000) {
+        //     std::cout << "Cycle #" << m_clk << '\n';
+        //     for (int i = 1; i <= 16; i++)
+        //         // std::cout << m_bank_counters[i].get_bank_id() << ' ' << m_bank_counters[i].get_count(21845) << '\n';
+        //         std::cout << m_bank_counters[i].get_count(21845) << '\t';
+        //     std::cout << '\n';
+        // }
 
         update_state_machine(request_found, *req_it);
 
@@ -230,6 +239,14 @@ private:
             return m_critical_rows.size() > 0;
         }
 
+        uint32_t get_count(int row_addr) {
+            return m_counters[row_addr];
+        }
+
+        int get_bank_id() {
+            return m_bank_id;
+        }
+
     private:
         struct CommandHandler {
             std::string cmd_name;
@@ -279,6 +296,7 @@ private:
                     m_bank_id, act_max->first, m_counters[act_max->first]);
             }
             m_counters[act_max->first] = 0;
+            // std::cout << m_bank_id << ' ' << act_max->first << '\n';
             m_critical_rows.erase(act_max->first);
         }
     };  // class PerBankCounters

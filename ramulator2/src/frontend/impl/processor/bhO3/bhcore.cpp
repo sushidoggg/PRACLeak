@@ -11,6 +11,8 @@
 
 namespace Ramulator {
 
+std::ofstream outFile("output.txt");
+
 namespace fs = std::filesystem;
 
 BHO3Core::Trace::Trace(std::string file_path_str) {
@@ -109,10 +111,13 @@ Clk_t BHO3Core::InstWindow::set_ready(Addr_t addr) {
 
 BHO3Core::BHO3Core(int id, int ipc, int depth, size_t num_expected_insts,
   uint64_t num_max_cycles, std::string trace_path, ITranslation* translation,
-  BHO3LLC* llc, int lat_hist_sens, std::string& dump_path, bool is_attacker):
+  BHO3LLC* llc, int lat_hist_sens, std::string& dump_path, bool is_attacker, 
+  bool no_activation, std::ofstream& latency_file):
 m_id(id), m_window(ipc, depth), m_trace(trace_path),
-m_num_expected_insts(num_expected_insts), m_num_max_cycles(num_max_cycles), m_translation(translation),
-m_llc(llc), m_lat_hist_sens(lat_hist_sens), m_is_attacker(is_attacker) {
+m_num_expected_insts(num_expected_insts), m_num_max_cycles(num_max_cycles), 
+m_translation(translation), m_llc(llc), m_lat_hist_sens(lat_hist_sens), 
+m_is_attacker(is_attacker), m_no_activation(no_activation), 
+m_latency_file(latency_file) {
   // Fetch the instructions and addresses for tick 0
   auto inst = m_trace.get_next_inst();
   m_num_bubbles = inst.bubble_count;
@@ -172,7 +177,16 @@ void BHO3Core::tick() {
       return;
     };
 
-    if (m_llc->send(load_request)) {
+    if (m_no_activation) {
+      m_llc->clflush(load_request.addr);
+      m_window.insert(true, -1, -1);
+      num_inserted_insts++;
+      m_num_bubbles--;
+
+      // std::cout << load_request.addr << ' ' << m_id << '\n';
+    }
+
+    else if (m_llc->send(load_request)) {
       s_mem_requests_issued++;
       m_window.insert(false, load_request.addr, m_clk);
       m_load_addr = -1;
@@ -218,10 +232,16 @@ void BHO3Core::receive(Request& req) {
       m_lat_histogram[lat_bucket] = 0;
     }
     m_lat_histogram[lat_bucket]++;
+
+    if (m_is_attacker) {
+      m_latency_file << m_clk << ' ' << req_duration << ' ' << req.addr << std::endl;
+      // m_latency_file.flush();
+    }
   }
 
-  if (m_is_attacker) {
+  if (m_is_attacker ) {
     m_llc->clflush(req.addr);
+    // std::cout << req.addr << '\n';
   }
 }
 
